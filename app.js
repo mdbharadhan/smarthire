@@ -5,6 +5,39 @@ const state = {
   user: JSON.parse(localStorage.getItem('ainex_user') || 'null'),
   analysis: JSON.parse(localStorage.getItem('ainex_latest_analysis') || 'null'),
   history: JSON.parse(localStorage.getItem('ainex_history') || '[]'),
+  statusMessage: '',
+  draftResume: '',
+  draftJD: '',
+  lastResumeName: ''
+};
+
+const SKILL_PATTERNS = {
+  javascript: [/\bjavascript\b/i, /\bjs\b/i, /\bes6\b/i],
+  typescript: [/\btypescript\b/i, /\bts\b/i],
+  react: [/\breact\b/i, /\breactjs\b/i, /\breact\.js\b/i],
+  node: [/\bnode\b/i, /\bnodejs\b/i, /\bnode\.js\b/i],
+  python: [/\bpython\b/i],
+  sql: [/\bsql\b/i, /\bmysql\b/i],
+  postgresql: [/\bpostgresql\b/i, /\bpostgres\b/i],
+  mongodb: [/\bmongodb\b/i, /\bmongo\b/i],
+  aws: [/\baws\b/i, /\bamazon web services\b/i],
+  docker: [/\bdocker\b/i],
+  kubernetes: [/\bkubernetes\b/i, /\bk8s\b/i],
+  git: [/\bgit\b/i, /\bgithub\b/i, /\bgitlab\b/i],
+  html: [/\bhtml\b/i, /\bhtml5\b/i],
+  css: [/\bcss\b/i, /\bcss3\b/i, /\btailwind\b/i, /\bbootstrap\b/i],
+  'next.js': [/\bnext\.js\b/i, /\bnextjs\b/i],
+  java: [/\bjava\b/i],
+  spring: [/\bspring\b/i, /\bspring boot\b/i],
+  excel: [/\bexcel\b/i],
+  'power bi': [/\bpower bi\b/i],
+  communication: [/\bcommunication\b/i, /\bstakeholder\b/i],
+  leadership: [/\bleadership\b/i, /\bled\b/i],
+  agile: [/\bagile\b/i, /\bscrum\b/i, /\bkanban\b/i],
+  'rest api': [/\brest\b/i, /\bapi\b/i, /\brestful\b/i],
+  testing: [/\btesting\b/i, /\bunit test\b/i, /\bjest\b/i, /\bcypress\b/i],
+  'machine learning': [/\bmachine learning\b/i, /\bml\b/i],
+  'data analysis': [/\bdata analysis\b/i, /\banalytics\b/i]
   statusMessage: ''
 };
 
@@ -37,6 +70,10 @@ const authForm = document.getElementById('authForm');
 const closeAuth = document.getElementById('closeAuth');
 const appLayout = document.getElementById('appLayout');
 
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
 function persist() {
   localStorage.setItem('ainex_user', JSON.stringify(state.user));
   localStorage.setItem('ainex_latest_analysis', JSON.stringify(state.analysis));
@@ -47,6 +84,14 @@ function setStatus(message = '') {
   state.statusMessage = message;
 }
 
+function extractSkills(text = '') {
+  const found = [];
+  Object.entries(SKILL_PATTERNS).forEach(([skill, patterns]) => {
+    if (patterns.some((pattern) => pattern.test(text))) {
+      found.push(skill);
+    }
+  });
+  return found;
 function dedupe(items) {
   return [...new Set(items)];
 }
@@ -66,6 +111,7 @@ function extractSkills(text = '') {
 
 function inferRole(jd) {
   const lower = jd.toLowerCase();
+  if (lower.includes('data')) return 'Data Analyst';
   if (lower.includes('data analyst') || lower.includes('analytics')) return 'Data Analyst';
   if (lower.includes('frontend') || lower.includes('react')) return 'Frontend Engineer';
   if (lower.includes('backend') || lower.includes('api')) return 'Backend Engineer';
@@ -74,6 +120,12 @@ function inferRole(jd) {
 }
 
 function runGrammarCheck(text) {
+  const checks = [
+    { pattern: /\bi\b/g, replacement: 'I', reason: 'Capitalize first-person pronoun' },
+    { pattern: /\bteh\b/gi, replacement: 'the', reason: 'Correct spelling: teh → the' },
+    { pattern: /\brecieve\b/gi, replacement: 'receive', reason: 'Correct spelling: recieve → receive' },
+    { pattern: /\bacheive\b/gi, replacement: 'achieve', reason: 'Correct spelling: acheive → achieve' },
+    { pattern: /\s{2,}/g, replacement: ' ', reason: 'Remove extra spaces' }
   const corrections = [
     { pattern: /\bi\b/g, replacement: 'I', reason: 'Capitalize first-person pronoun' },
     { pattern: /\bteh\b/gi, replacement: 'the', reason: 'Spelling correction' },
@@ -85,6 +137,10 @@ function runGrammarCheck(text) {
   let corrected = text;
   const issues = [];
 
+  checks.forEach(({ pattern, replacement, reason }) => {
+    if (pattern.test(corrected)) {
+      corrected = corrected.replace(pattern, replacement);
+      issues.push(reason);
   corrections.forEach(({ pattern, replacement, reason }) => {
     if (pattern.test(corrected)) {
       corrected = corrected.replace(pattern, replacement);
@@ -98,6 +154,42 @@ function runGrammarCheck(text) {
   };
 }
 
+function generateSuggestions({ role, required, missing, matched, resumeText }) {
+  const suggestions = [];
+
+  missing.slice(0, 5).forEach((skill) => {
+    suggestions.push(`Add one quantified bullet for ${skill}. Example: "Used ${skill} to improve a KPI by X% in Y months."`);
+  });
+
+  if (!/\b(project|experience|work history)\b/i.test(resumeText)) {
+    suggestions.push('Add a clear "Experience" or "Projects" section to improve recruiter readability.');
+  }
+
+  if (!/\d+%|\$\d+|\d+\s*(days|weeks|months|users|clients)/i.test(resumeText)) {
+    suggestions.push('Include measurable outcomes (%, money saved, time reduced, users impacted) in achievements.');
+  }
+
+  if (matched.length) {
+    suggestions.push(`Align your professional summary with the role (${role}) using matched skills: ${matched.slice(0, 4).join(', ')}.`);
+  }
+
+  if (required.length > matched.length) {
+    suggestions.push('Reorder sections so the most relevant skills and projects appear in the top half of page 1.');
+  }
+
+  return [...new Set(suggestions)].slice(0, 7);
+}
+
+function analyzeResume(resumeText, jdText, resumeName = 'Resume') {
+  const required = extractSkills(jdText);
+  const found = extractSkills(resumeText);
+  const matched = required.filter((skill) => found.includes(skill));
+  const missing = required.filter((skill) => !found.includes(skill));
+
+  const keywordMatchScore = required.length ? Math.round((matched.length / required.length) * 100) : 35;
+  const skillAlignmentScore = found.length ? Math.round((matched.length / found.length) * 100) : 0;
+  const formattingScore = Math.max(50, Math.min(100, Math.round((resumeText.split('\n').filter(Boolean).length / 18) * 100)));
+  const score = Math.min(100, Math.max(0, Math.round(keywordMatchScore * 0.5 + skillAlignmentScore * 0.25 + formattingScore * 0.25)));
 function analyzeResume(resumeText, jdText, resumeName = 'Resume') {
   const required = extractSkills(jdText);
   const resumeSkills = extractSkills(resumeText);
@@ -115,6 +207,34 @@ function analyzeResume(resumeText, jdText, resumeName = 'Resume') {
   return {
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
+    resumeName,
+    role: inferRole(jdText),
+    required,
+    matched,
+    missing,
+    score,
+    keywordMatchScore,
+    skillAlignmentScore,
+    formattingScore,
+    suggestions: generateSuggestions({ role: inferRole(jdText), required, missing, matched, resumeText }),
+    grammar: runGrammarCheck(resumeText)
+  };
+}
+
+async function parsePdfToText(file) {
+  if (!window.pdfjsLib) throw new Error('PDF parser not loaded');
+  const buffer = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+
+  const pages = [];
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const pageText = content.items.map((item) => item.str).join(' ');
+    pages.push(pageText);
+  }
+
+  return pages.join('\n').replace(/\s{2,}/g, ' ').trim();
     role: inferRole(jdText),
     resumeName,
     required,
@@ -152,6 +272,7 @@ function openAuth(mode) {
 
 function renderAuthActions() {
   if (!state.user) {
+    authActions.innerHTML = '<button class="btn" id="loginBtn">Login</button><button class="btn" id="signupBtn">Sign Up</button>';
     authActions.innerHTML = `
       <button class="btn" id="loginBtn">Login</button>
       <button class="btn" id="signupBtn">Sign Up</button>
@@ -161,6 +282,7 @@ function renderAuthActions() {
     return;
   }
 
+  authActions.innerHTML = `<span>Welcome, ${state.user.name}</span> <button class="btn" id="logoutBtn">Logout</button>`;
   authActions.innerHTML = `<span>Welcome, ${state.user.name}</span><button class="btn" id="logoutBtn">Logout</button>`;
   document.getElementById('logoutBtn').onclick = () => {
     state.user = null;
@@ -185,6 +307,7 @@ function setRoute(route) {
   const showDashboard = route === 'dashboard';
   sidebar.classList.toggle('hidden', !showDashboard);
   appLayout.classList.toggle('dashboard-mode', showDashboard);
+
   render();
 }
 
@@ -193,6 +316,10 @@ function uploadFormTemplate() {
     <form id="analyzeForm" class="panel">
       <div class="grid-two">
         <div>
+          <label for="resumeFile">Upload Resume (PDF/TXT/DOC)</label>
+          <input id="resumeFile" type="file" accept=".txt,.md,.doc,.docx,.pdf" />
+          <label for="resumeText">Or Paste Resume Text
+            <textarea id="resumeText" rows="11" placeholder="Paste resume content here...">${state.draftResume}</textarea>
           <label for="resumeFile">Upload Resume (text readable file recommended)</label>
           <input id="resumeFile" type="file" accept=".txt,.md,.doc,.docx,.pdf" />
           <label for="resumeText">Or Paste Resume Text
@@ -201,6 +328,7 @@ function uploadFormTemplate() {
         </div>
         <div>
           <label for="jobDescription">Paste Job Description
+            <textarea id="jobDescription" rows="14" placeholder="Paste full job description here...">${state.draftJD}</textarea>
             <textarea id="jobDescription" rows="14" placeholder="Paste full job description here..."></textarea>
           </label>
           <button class="btn" type="submit">Analyze Resume</button>
@@ -210,6 +338,20 @@ function uploadFormTemplate() {
   `;
 }
 
+function bindHomeEvents() {
+  if (!state.user) return;
+
+  const fileInput = document.getElementById('resumeFile');
+  const resumeText = document.getElementById('resumeText');
+  const jdText = document.getElementById('jobDescription');
+
+  resumeText.addEventListener('input', (e) => {
+    state.draftResume = e.target.value;
+  });
+
+  jdText.addEventListener('input', (e) => {
+    state.draftJD = e.target.value;
+  });
 function renderHome() {
   homeView.innerHTML = `
     <h2>Welcome to AINEX</h2>
@@ -228,6 +370,26 @@ function renderHome() {
     if (!file) return;
 
     try {
+      let parsed = '';
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        parsed = await parsePdfToText(file);
+      } else {
+        parsed = await file.text();
+      }
+
+      if (!parsed.trim()) {
+        setStatus('Could not extract readable text from this file. Please paste text manually for best results.');
+      } else {
+        state.lastResumeName = file.name;
+        state.draftResume = parsed;
+        resumeText.value = parsed;
+        setStatus(`Resume parsed successfully from ${file.name}.`);
+      }
+    } catch {
+      setStatus('Resume parsing failed for this file. Please paste resume text manually.');
+    }
+
+    renderHome();
       const text = await file.text();
       if (!text.trim()) {
         setStatus('Uploaded file is empty. Please paste resume text manually.');
@@ -245,6 +407,10 @@ function renderHome() {
 
   document.getElementById('analyzeForm').onsubmit = (e) => {
     e.preventDefault();
+    const resume = resumeText.value.trim();
+    const jd = jdText.value.trim();
+
+    if (!resume || !jd) {
     const resumeText = document.getElementById('resumeText').value.trim();
     const jdText = document.getElementById('jobDescription').value.trim();
     const uploadedFile = document.getElementById('resumeFile').files?.[0];
@@ -255,6 +421,8 @@ function renderHome() {
       return;
     }
 
+    const result = analyzeResume(resume, jd, state.lastResumeName || `Resume v${state.history.length + 1}`);
+    state.analysis = result;
     const result = analyzeResume(resumeText, jdText, uploadedFile?.name || `Resume v${state.history.length + 1}`);
     state.analysis = result;
 
@@ -270,6 +438,9 @@ function renderHome() {
       timestamp: result.timestamp
     });
 
+    state.history = state.history.slice(0, 25).map((row, idx) => ({ ...row, sNo: idx + 1 }));
+    persist();
+    setStatus('Analysis completed successfully.');
     state.history = state.history.slice(0, 25).map((item, i) => ({ ...item, sNo: i + 1 }));
     setStatus('Analysis completed successfully.');
     persist();
@@ -277,6 +448,37 @@ function renderHome() {
   };
 }
 
+function renderHome() {
+  homeView.innerHTML = `
+    <h2>Welcome to AINEX</h2>
+    <p class="small">Upload resume, add job description, and get detailed analysis with suggestions.</p>
+    ${state.statusMessage ? `<p class="small">${state.statusMessage}</p>` : ''}
+    ${state.user ? uploadFormTemplate() : '<div class="panel"><h3>Please login or sign up to start.</h3></div>'}
+  `;
+
+  bindHomeEvents();
+}
+
+function renderAnalyze() {
+  if (!state.analysis) {
+    analyzeView.innerHTML = '<h2>No analysis yet</h2><p>Go to Home and analyze your resume first.</p>';
+    return;
+  }
+
+  const a = state.analysis;
+  const angle = -90 + (a.score / 100) * 180;
+
+  analyzeView.innerHTML = `
+    <h2>Resume Analysis (${a.role})</h2>
+    <p class="small">Resume: ${a.resumeName}</p>
+    <div class="grid-two">
+      <div class="speedometer-wrap">
+        <div class="speedometer"><div class="needle" style="transform: rotate(${angle}deg)"></div></div>
+        <div class="score">Resume Strength: <strong>${a.score}%</strong></div>
+      </div>
+      <div class="panel">
+        <h3>AI Suggestions</h3>
+        <ul>${a.suggestions.map((s) => `<li>${s}</li>`).join('')}</ul>
 function renderAnalyze() {
   if (!state.analysis) {
     analyzeView.innerHTML = '<h2>No analysis yet</h2><p>Go to Home, upload resume, and analyze first.</p>';
@@ -310,6 +512,9 @@ function renderAnalyze() {
           </thead>
           <tbody>
             <tr>
+              <td>${a.required.join(', ') || '-'}</td>
+              <td>${a.matched.join(', ') || '-'}</td>
+              <td>${a.missing.join(', ') || '-'}</td>
               <td>${state.analysis.required.join(', ') || '-'}</td>
               <td>${state.analysis.matched.join(', ') || '-'}</td>
               <td>${state.analysis.missing.join(', ') || '-'}</td>
@@ -321,6 +526,9 @@ function renderAnalyze() {
 
     <div class="panel">
       <h3>Grammar Check</h3>
+      <ul>${a.grammar.issues.map((issue) => `<li>${issue}</li>`).join('')}</ul>
+      <p><strong>Corrected Resume Preview:</strong></p>
+      <textarea rows="7" readonly>${a.grammar.corrected}</textarea>
       <p><strong>Detected Issues:</strong></p>
       <ul>${state.analysis.grammar.issues.map((issue) => `<li>${issue}</li>`).join('')}</ul>
       <p><strong>Corrected Resume Preview:</strong></p>
@@ -330,6 +538,17 @@ function renderAnalyze() {
 }
 
 function generateQuestions(analysis) {
+  if (!analysis) return ['Run analysis first to generate interview questions.'];
+
+  const top = analysis.matched.slice(0, 4);
+  const gaps = analysis.missing.slice(0, 3);
+
+  return [
+    `Describe a project where you used ${top[0] || 'your strongest skill'} and delivered measurable impact.`,
+    `How do you prioritize work for a ${analysis.role} role under tight deadlines?`,
+    `How would you improve quality and performance in this role?`,
+    `What is your 30-60-90 day plan for this position?`,
+    ...gaps.map((skill) => `How will you close your ${skill} gap quickly if hired?`)
   if (!analysis) return ['Run resume analysis first to generate role-specific interview questions.'];
 
   const matched = analysis.matched.slice(0, 4);
@@ -351,6 +570,11 @@ function drawHistoryChart() {
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.strokeStyle = 'rgba(255,255,255,.35)';
+  ctx.lineWidth = 1;
+
   ctx.clearRect(0, 0, width, height);
 
   ctx.strokeStyle = 'rgba(255,255,255,.35)';
@@ -394,6 +618,11 @@ function renderDashboard() {
   }
 
   const tab = state.dashboardTab;
+  const latest = state.analysis || { keywordMatchScore: 0, skillAlignmentScore: 0, formattingScore: 0, matched: [], missing: [] };
+
+  if (tab === 'overview') {
+    const avgKeyword = state.history.length
+      ? Math.round(state.history.reduce((sum, item) => sum + item.keywordMatchScore, 0) / state.history.length)
   const latest = state.analysis || { keywordMatchScore: 0, skillAlignmentScore: 0, formattingScore: 0 };
 
   if (tab === 'overview') {
@@ -427,6 +656,10 @@ function renderDashboard() {
           <h3>Interview Question Generator</h3>
           <ol>${questions.map((q) => `<li>${q}</li>`).join('')}</ol>
         </div>
+        <div class="panel">
+          <h3>Skills for this role</h3>
+          <p><strong>Matched:</strong> ${latest.matched.join(', ') || '-'}</p>
+          <p><strong>Missing:</strong> ${latest.missing.join(', ') || '-'}</p>
 
         <div class="panel">
           <h3>Matched Skills for Job Role</h3>
@@ -443,6 +676,17 @@ function renderDashboard() {
       <div class="table-wrap">
         <table class="table">
           <thead>
+            <tr><th>Serial No.</th><th>Resume</th><th>Job Role</th><th>Resume Strength</th></tr>
+          </thead>
+          <tbody>
+            ${state.history.length ? state.history.map((row) => `
+              <tr>
+                <td>${row.sNo}</td>
+                <td>${row.resumeName}</td>
+                <td>${row.role}</td>
+                <td>${row.score}%</td>
+              </tr>
+            `).join('') : '<tr><td colspan="4">No history yet.</td></tr>'}
             <tr>
               <th>Serial No.</th>
               <th>Resume</th>
@@ -484,16 +728,19 @@ sideLinks.forEach((btn) => btn.addEventListener('click', () => {
 
 authForm.addEventListener('submit', (event) => {
   event.preventDefault();
+
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value.trim();
 
   if (!email || password.length < 6) {
+    setStatus('Please enter valid email and password (min 6 chars).');
     setStatus('Please enter a valid email and password (minimum 6 characters).');
     authDialog.close();
     render();
     return;
   }
 
+  state.user = { name: email.split('@')[0], email };
   state.user = { name: email.split('@')[0], email, mode: state.authMode };
   setStatus(`${state.authMode === 'login' ? 'Login' : 'Sign up'} successful.`);
   persist();

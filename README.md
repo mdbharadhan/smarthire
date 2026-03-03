@@ -85,3 +85,10 @@ Then open:
 
 - This is a production-style frontend prototype with deterministic local logic.
 - For enterprise production, connect analysis modules to backend AI/NLP APIs (resume parser, grammar engine, LLM recommendations, question generation, role ontology, analytics DB).
+
+## Follow-up hotfix improvements
+
+Latest iteration also includes a focused quality update for real-world resume ingestion and analysis:
+- Better PDF resume extraction using `pdf.js`.
+- More reliable skill matching with pattern-based detection.
+- More actionable suggestion generation for resume refinement.
