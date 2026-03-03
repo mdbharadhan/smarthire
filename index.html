@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AINEX - AI Resume Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top-nav card">
+      <div class="brand">AINEX</div>
+      <nav class="main-nav">
+        <button class="nav-link" data-route="home">Home</button>
+        <button class="nav-link" data-route="analyze">Analyze</button>
+        <button class="nav-link" data-route="dashboard">Dashboard</button>
+      </nav>
+      <div class="auth-actions" id="authActions"></div>
+    </header>
+
+    <main class="layout" id="appLayout">
+      <aside class="sidebar card" id="sidebar">
+        <h3>Dashboard</h3>
+        <button class="side-link active" data-tab="overview">Overview</button>
+        <button class="side-link" data-tab="interview">Interview Prep</button>
+        <button class="side-link" data-tab="history">History</button>
+      </aside>
+
+      <section class="content">
+        <div id="homeView" class="view card"></div>
+        <div id="analyzeView" class="view card hidden"></div>
+        <div id="dashboardView" class="view card hidden"></div>
+      </section>
+    </main>
+
+    <dialog id="authDialog" class="card auth-dialog">
+      <h2 id="authTitle">Login</h2>
+      <form id="authForm" method="dialog">
+        <label>Email<input required type="email" id="authEmail" placeholder="you@example.com" /></label>
+        <label>Password<input required type="password" id="authPassword" minlength="6" placeholder="******" /></label>
+        <div class="dialog-actions">
+          <button class="btn" type="submit">Continue</button>
+          <button class="btn secondary" type="button" id="closeAuth">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
